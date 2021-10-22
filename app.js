@@ -88,7 +88,7 @@ function setupCanvas() {
   ctx.fillText("A : Move Left", 310, 388);
   ctx.fillText("D : Move Right", 310, 413);
   ctx.fillText("S : Move Down", 310, 438);
-  ctx.fillText("E : Rotate Right", 310, 463);
+  ctx.fillText("W : Rotate Right", 310, 463);
 
   document.addEventListener('keydown', handleKeyPress);
   createTetrominos();
@@ -111,33 +111,51 @@ function drawTetromino() {
 }
 
 function handleKeyPress(key) {
-  if (key.keyCode === 65) {
-    dir = DIRECTION.LEFT;
-    if (!hittingTheWall()) {
-      deleteTetromino();
-      --startX;
-      drawTetromino();
+  if (winOrLose != "Game Over") {
+    if (key.keyCode === 65) {
+      dir = DIRECTION.LEFT;
+      if (!hittingTheWall() && !checkHorizontalCollision()) {
+        deleteTetromino();
+        --startX;
+        drawTetromino();
+      }
+    } else if (key.keyCode === 68) {
+      dir = DIRECTION.RIGHT;
+      if (!hittingTheWall() && !checkHorizontalCollision()) {
+        deleteTetromino();
+        ++startX;
+        drawTetromino();
+      }
+    } else if (key.keyCode === 83) {
+      moveTetrominoDown();
+    } else if (key.keyCode === 87) {
+      rotateTetromino();
     }
-  } else if (key.keyCode === 68) {
-    dir = DIRECTION.RIGHT;
-    if (!hittingTheWall()) {
-      deleteTetromino();
-      ++startX;
-      drawTetromino();
-    }
-  } else if (key.keyCode === 83) {
-    dir = DIRECTION.DOWN;
+  }
+}
+
+function moveTetrominoDown() {
+  dir = DIRECTION.DOWN;
+  if (!checkVerticalCollision()) {
     deleteTetromino();
     ++startY;
     drawTetromino();
   }
 }
 
+window.setInterval(function() {
+  if (winOrLose != "Game Over") {
+    moveTetrominoDown();
+  }
+}, 1000);
+
 function deleteTetromino() {
   for (let i = 0; i < curTetromino.length; ++i) {
     let x = curTetromino[i][0] + startX;
     let y = curTetromino[i][1] + startY;
+
     gameBoardArray[x][y] = 0;
+
     let coorX = coordinateArray[x][y].x;
     let coorY = coordinateArray[x][y].y;
     ctx.fillStyle = 'white';
@@ -179,3 +197,180 @@ function hittingTheWall() {
   }
   return false;
 }
+
+function checkVerticalCollision() {
+  let tetrominoCpy = curTetromino;
+  let collision = false;
+
+  for (let i = 0; i < tetrominoCpy.length; ++i) {
+    let square = tetrominoCpy[i];
+    let x = square[0] + startX;
+    let y = square[1] + startY;
+
+    if (dir === DIRECTION.DOWN) {
+      ++y;
+    }
+
+    if (typeof stoppedShapeArray[x][y + 1] === 'string') {
+      deleteTetromino();
+      startY++;
+      drawTetromino();
+      collision = true;
+      break;
+    }
+    if (y >= 20) {
+      collision = true;
+      break;
+    }
+  }
+
+  if (collision) {
+    if (startY <= 2) {
+      winOrLose = "Game Over";
+      ctx.fillStyle = 'white';
+      ctx.fillRect(310, 242, 140, 30);
+      ctx.fillStyle = 'black';
+      ctx.fillText(winOrLose, 310, 261);
+    } else {
+      for (let i = 0; i < tetrominoCpy.length; ++i) {
+        let square = tetrominoCpy[i];
+        let x = square[0] + startX;
+        let y = square[1] + startY;
+        stoppedShapeArray[x][y] = curTetrominoColor;
+      }
+      checkCompletedRows();
+
+      createTetromino();
+      dir = DIRECTION.IDLE;
+      startX = 4;
+      startY = 0;
+      drawTetromino();
+    }
+  }
+}
+
+function checkHorizontalCollision() {
+  let tetrominoCpy = curTetromino;
+  let collision = false;
+  for (let i = 0; i < tetrominoCpy.length; ++i) {
+    let square = tetrominoCpy[i];
+    let x = square[0] + startX;
+    let y = square[1] + startY;
+
+    if (dir === DIRECTION.LEFT) {
+      --x;
+    } else if (dir === DIRECTION.RIGHT) {
+      ++x;
+    }
+
+    var stoppedShapeVal = stoppedShapeArray[x][y];
+    if (typeof stoppedShapeVal === 'string') {
+      collision = true;
+      break;
+    }
+  }
+  return collision;
+}
+
+function checkCompletedRows() {
+  let rowsToDelete = 0;
+  let startOfDeletion = 0;
+  for (let y = 0; y < gBArrayHeight; ++y) {
+    let completed = true;
+    for (let x = 0; x < gBArrayWidth; ++x) {
+      let square = stoppedShapeArray[x][y];
+      if (square === 0 || typeof square === 'undefined') {
+        completed = false;
+        break;
+      }
+    }
+
+    if (completed) {
+      if (startOfDeletion === 0) startOfDeletion = y;
+      ++rowsToDelete;
+      for (let i = 0; i < gBArrayWidth; ++i) {
+        stoppedShapeArray[i][y] = 0;
+        gameBoardArray[i][y] = 0;
+        let coorX = coordinateArray[i][y].x;
+        let coorY = coordinateArray[i][y].y;
+        ctx.fillStyle = 'white';
+        ctx.fillRect(coorX, coorY, 21, 21);
+      }
+    }
+  }
+  if (rowsToDelete > 0) {
+    score += 10;
+    ctx.fillStyle = 'white';
+    ctx.fillRect(310, 109, 140, 19);
+    ctx.fillStyle = 'black';
+    ctx.fillText(score.toString(), 310, 127);
+    moveAllRowsDown(rowsToDelete, startOfDeletion);
+  }
+}
+
+function moveAllRowsDown(rowsToDelete, startOfDeletion) {
+  for (var i = startOfDeletion - 1; i >= 0; --i) {
+    for (var x = 0; x < gBArrayWidth; ++x) {
+      var y2 = i + rowsToDelete;
+      var square = stoppedShapeArray[x][i];
+      var nextSquare = stoppedShapeArray[x][y2];
+      if (typeof square === 'string') {
+        nextSquare = square;
+        gameBoardArray[x][y2] = 1;
+        stoppedShapeArray[x][y2] = square;
+        
+        let coorX = coordinateArray[x][y2].x;
+        let coorY = coordinateArray[x][y2].y;
+        ctx.fillStyle = nextSquare;
+        ctx.fillRect(coorX, coorY, 21, 21);
+
+        square = 0;
+        gameBoardArray[x][i] = 0;
+        stoppedShapeArray[x][i] = 0;
+        coorX = coordinateArray[x][i].x;
+        coorY = coordinateArray[x][i].y;
+        ctx.fillStyle = 'white';
+        ctx.fillRect(coorX, coorY, 21, 21);
+      }
+    }
+  }
+}
+
+function rotateTetromino() {
+  let newRotation = new Array();
+  let tetrominoCpy = curTetromino;
+  let curTetrominoBackUp;
+  for (let i = 0; i < tetrominoCpy.length; ++i) {
+    curTetrominoBackUp = [...curTetromino];
+
+    let x = tetrominoCpy[i][0];
+    let y = tetrominoCpy[i][1];
+    let newX = getLastSquareX() - y;
+    let newY = x;
+    newRotation.push([newX, newY]);
+  }
+  deleteTetromino;
+
+  try {
+    curTetromino = newRotation;
+    drawTetromino();
+  } catch(e) {
+    if (e instanceof TypeError) {
+      curTetromino = curTetrominoBackUp;
+      deleteTetromino();
+      drawTetromino();
+    }
+  }
+}
+
+function getLastSquareX() {
+  let lastX = 0;
+  for (let i = 0; i < curTetromino.length; ++i) {
+    let square = curTetromino[i];
+    if (square[0] > lastX) {
+      lastX = square[0];
+    }
+  }
+  return lastX;
+}
+
